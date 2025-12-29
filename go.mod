@@ -1,4 +1,4 @@
-module wecont
+module github.com/0wew0-gh/wecont
 
 go 1.25.5
 
