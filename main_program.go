@@ -6,6 +6,7 @@ import (
 	"log"
 	"net"
 	"os"
+	"os/exec"
 )
 
 var (
@@ -27,27 +28,38 @@ func Init(path string, infoLog *log.Logger, debugLog *log.Logger, errLog *log.Lo
 	return wc, nil
 }
 
-// func cc() Program {
-// 	// 1. 尝试删除旧文件（不检查错误，因为文件可能本就不存在）
-// 	os.Remove(SocketAddr)
+// 启动子程序
+func (wc Wecont) StartChild(programID string) (*exec.Cmd, error) {
+	programObj, ok := wc.Programs[programID]
+	if !ok {
+		return nil, fmt.Errorf("no find program")
+	}
 
-// 	// 读取PID文件，并结束旧进程
-// 	pidBytes, err := os.ReadFile(subPID)
-// 	if err == nil {
-// 		pidInt, err := strconv.Atoi(string(pidBytes))
-// 		if err == nil {
-// 			err = killByPid(pidInt)
-// 			if err != nil {
-// 				fmt.Println("结束旧进程失败:", err)
-// 			}
-// 		}
-// 		_ = os.Remove(subPID)
-// 	}
+	cmd := SetAttributes(programObj.Path)
 
-// 	// 将 PID 记录到文件，主程序重启后可依据此 PID 监控
-// 	os.WriteFile(subPID, []byte(fmt.Sprintf("%d", cmd.Process.Pid)), 0644)
-// 	fmt.Printf("子程序已启动，PID: %d\n", cmd.Process.Pid)
-// }
+	cmd.Stdout = l.Info.Writer()
+	cmd.Stderr = l.Error.Writer()
+
+	if err := cmd.Start(); err != nil {
+		return nil, fmt.Errorf("cmd start failed: %s", err)
+	}
+
+	// 1. 删除旧文件（不检查错误，因为文件可能本就不存在）
+	os.Remove(SocketAddr)
+
+	if programObj.PID > 0 {
+		err := killByPid(programObj.PID)
+		if err != nil {
+			l.Error.Printf("kill program %d failed: %s\n", programObj.PID, err)
+		}
+		os.Remove(subPID)
+	}
+
+	programObj.PID = cmd.Process.Pid
+	wc.Programs[programID] = programObj
+
+	return cmd, nil
+}
 
 func (wc Wecont) SendMsg(id string, cmd string) (string, error) {
 	p, ok := wc.Programs[id]
