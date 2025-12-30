@@ -9,13 +9,12 @@ import (
 )
 
 var (
-	wc Wecont = Wecont{IsNull: true}
-	l  Logger
+	pID_path string
+	l        Logger
 )
 
-func Init(infoLog *log.Logger, debugLog *log.Logger, errLog *log.Logger) error {
-	var err error
-	wc, err = ReadConfig()
+func Init(path string, infoLog *log.Logger, debugLog *log.Logger, errLog *log.Logger) (Wecont, error) {
+	wc, err := ReadConfig(path)
 	if err != nil {
 		wc = Wecont{
 			IsNull:   false,
@@ -24,7 +23,8 @@ func Init(infoLog *log.Logger, debugLog *log.Logger, errLog *log.Logger) error {
 	}
 	wc.IsNull = false
 	l = Logger{Info: infoLog, Debug: debugLog, Error: errLog}
-	return nil
+	pID_path = path
+	return wc, nil
 }
 
 // func cc() Program {
@@ -49,8 +49,8 @@ func Init(infoLog *log.Logger, debugLog *log.Logger, errLog *log.Logger) error {
 // 	fmt.Printf("子程序已启动，PID: %d\n", cmd.Process.Pid)
 // }
 
-func (w Wecont) SendMsg(id string, cmd string) (string, error) {
-	p, ok := w.Programs[id]
+func (wc Wecont) SendMsg(id string, cmd string) (string, error) {
+	p, ok := wc.Programs[id]
 	if !ok {
 		return "", fmt.Errorf("program not found")
 	}

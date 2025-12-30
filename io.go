@@ -22,6 +22,10 @@ func saveFile(path string, name string, content []byte) error {
 	if len(content) == 0 {
 		return fmt.Errorf("content is nil")
 	}
+	err := checkFolder(path)
+	if err != nil {
+		return err
+	}
 
 	filePath := fmt.Sprintf("%s%s.eml", path, name)
 

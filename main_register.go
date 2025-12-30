@@ -9,10 +9,10 @@ import (
 	"github.com/kagurazakayashi/libNyaruko_Go/nyacrypt"
 )
 
-func ReadConfig() (Wecont, error) {
-	scStr, err := openFile(subPID)
+func ReadConfig(path string) (Wecont, error) {
+	scStr, err := openFile(fmt.Sprintf("%s%s", path, subPID))
 	if err != nil {
-		return Wecont{}, err
+		return Wecont{IsNull: true}, err
 	}
 	var wc Wecont
 	var configObj Programs
@@ -29,7 +29,7 @@ func ReadConfig() (Wecont, error) {
 	return wc, nil
 }
 
-func (wc Wecont) SaveConfig() error {
+func (wc Wecont) SaveConfig(path string) error {
 	var configObj Programs
 	for _, v := range wc.Programs {
 		configObj = append(configObj, v)
@@ -41,7 +41,7 @@ func (wc Wecont) SaveConfig() error {
 		return err
 	}
 
-	return saveFile("", subPID, configBytes)
+	return saveFile(path, subPID, configBytes)
 }
 
 func (wc Wecont) RegisterProgram(c Config) (Wecont, error) {
@@ -51,7 +51,7 @@ func (wc Wecont) RegisterProgram(c Config) (Wecont, error) {
 
 	wc.Programs[id] = newP
 
-	err := wc.SaveConfig()
+	err := wc.SaveConfig(pID_path)
 	return wc, err
 }
 
@@ -65,6 +65,6 @@ func (wc Wecont) RemoveProgram(id string) (Wecont, error) {
 		return wc, err
 	}
 	delete(wc.Programs, id)
-	err = wc.SaveConfig()
+	err = wc.SaveConfig(pID_path)
 	return wc, err
 }
