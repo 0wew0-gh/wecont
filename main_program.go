@@ -38,7 +38,7 @@ func (wc Wecont) StartChild(programID string) (*exec.Cmd, error) {
 		return nil, fmt.Errorf("no find program")
 	}
 
-	cmd := SetAttributes(programObj.Path)
+	cmd := SetAttributes(fmt.Sprintf("%s%s", programObj.Path, programObj.FileName))
 
 	cmd.Stdout = l.Info.Writer()
 	cmd.Stderr = l.Error.Writer()
@@ -91,6 +91,8 @@ func (wc Wecont) StopChild(programID string) error {
 			killByPid(int(v))
 		}
 	}
+
+	os.Remove(fmt.Sprintf("%s%s", programObj.Path, SocketAddr))
 
 	return nil
 }
