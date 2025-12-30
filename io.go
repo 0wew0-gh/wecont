@@ -22,23 +22,28 @@ func saveFile(path string, name string, content []byte) error {
 	if len(content) == 0 {
 		return fmt.Errorf("content is nil")
 	}
-	err := checkFolder(path)
-	if err != nil {
-		return err
+	if path != "" {
+		err := checkFolder(path)
+		if err != nil {
+			return err
+		}
 	}
 
-	filePath := fmt.Sprintf("%s%s.eml", path, name)
-
-	f, err := os.Create(filePath)
+	filePath := fmt.Sprintf("%s%s", path, name)
+	f, err := os.OpenFile(filePath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
 	if err != nil {
-		return err
+		f, err = os.Create(filePath)
+		if err != nil {
+			return err
+		}
 	}
+	defer f.Close()
+
 	if _, err := f.Write(content); err != nil {
 		f.Close()
 		os.Remove(path)
 		return err
 	}
-	err = f.Close()
 	return err
 }
 

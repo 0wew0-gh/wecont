@@ -16,8 +16,9 @@ const (
 )
 
 type Config struct {
-	Name string `json:"name"`
-	Path string `json:"path"`
+	Name     string `json:"name"`
+	Path     string `json:"path"`
+	FileName string `json:"file_name"`
 }
 
 type Wecont struct {
@@ -26,12 +27,13 @@ type Wecont struct {
 }
 
 type Program struct {
-	ID      string `json:"id"`
-	PID     int    `json:"pid"`
-	Name    string `json:"name"`
-	Path    string `json:"path"`
-	Created int64  `json:"created"`
-	Status  string `json:"status"`
+	ID       string `json:"id"`
+	PID      int    `json:"pid"`
+	Name     string `json:"name"`
+	FileName string `json:"file_name"`
+	Path     string `json:"path"`
+	Created  int64  `json:"created"`
+	Status   string `json:"status"`
 }
 type Programs []Program
 

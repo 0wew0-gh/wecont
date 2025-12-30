@@ -7,6 +7,9 @@ import (
 	"net"
 	"os"
 	"os/exec"
+	"strings"
+
+	"github.com/shirou/gopsutil/v3/process"
 )
 
 var (
@@ -41,7 +44,7 @@ func (wc Wecont) StartChild(programID string) (*exec.Cmd, error) {
 	cmd.Stderr = l.Error.Writer()
 
 	if err := cmd.Start(); err != nil {
-		return nil, fmt.Errorf("cmd start failed: %s", err)
+		return nil, fmt.Errorf("cmd start failed: %v", err)
 	}
 
 	// 1. 删除旧文件（不检查错误，因为文件可能本就不存在）
@@ -50,7 +53,7 @@ func (wc Wecont) StartChild(programID string) (*exec.Cmd, error) {
 	if programObj.PID > 0 {
 		err := killByPid(programObj.PID)
 		if err != nil {
-			l.Error.Printf("kill program %d failed: %s\n", programObj.PID, err)
+			l.Error.Printf("kill program %d failed: %v\n", programObj.PID, err)
 		}
 		os.Remove(subPID)
 	}
@@ -58,7 +61,38 @@ func (wc Wecont) StartChild(programID string) (*exec.Cmd, error) {
 	programObj.PID = cmd.Process.Pid
 	wc.Programs[programID] = programObj
 
+	wc.SaveConfig(pID_path)
+
 	return cmd, nil
+}
+
+func (wc Wecont) StopChild(programID string) error {
+	programObj, ok := wc.Programs[programID]
+	if !ok {
+		return fmt.Errorf("no find program")
+	}
+
+	programObj.sendMsg("STOP")
+
+	pid := programObj.PID
+
+	programObj.PID = 0
+	wc.Programs[programID] = programObj
+	wc.SaveConfig(pID_path)
+
+	findPIDs, err := getPidsByName(programObj.Name, programObj.Path)
+	if err != nil {
+		return err
+	}
+
+	for _, v := range findPIDs {
+		if v == int32(pid) {
+			l.Info.Printf("kill program %d\n", v)
+			killByPid(int(v))
+		}
+	}
+
+	return nil
 }
 
 func (wc Wecont) SendMsg(id string, cmd string) (string, error) {
@@ -67,10 +101,14 @@ func (wc Wecont) SendMsg(id string, cmd string) (string, error) {
 		return "", fmt.Errorf("program not found")
 	}
 
+	return p.sendMsg(cmd)
+}
+
+func (p Program) sendMsg(cmd string) (string, error) {
 	// 拨号连接 .sock 或管道
 	conn, err := net.Dial(NetType, fmt.Sprintf("%s%s", p.Path, SocketAddr))
 	if err != nil {
-		return "", fmt.Errorf("link .sock failed: %s", err)
+		return "", fmt.Errorf("link .sock failed: %v", err)
 	}
 	defer conn.Close()
 
@@ -80,7 +118,37 @@ func (wc Wecont) SendMsg(id string, cmd string) (string, error) {
 	// 读取回复
 	reader := bufio.NewReader(conn)
 	reply, err := reader.ReadString('\n')
-	return reply, fmt.Errorf("read reply failed: %s", err)
+	return reply, fmt.Errorf("read reply failed: %v", err)
+
+}
+
+func getPidsByName(targetName string, targetPath string) ([]int32, error) {
+	var pids []int32
+
+	// 获取所有进程列表
+	processes, err := process.Processes()
+	if err != nil {
+		return nil, fmt.Errorf("get pid faild:%v", err)
+	}
+
+	for _, p := range processes {
+		// 获取进程名称
+		name, err := p.Name()
+		if err != nil {
+			continue // 忽略权限不足或已退出的进程
+		}
+
+		path, err := p.Exe()
+		if err != nil {
+			continue
+		}
+
+		// 匹配名称 (不区分大小写)
+		if strings.EqualFold(name, targetName) && strings.EqualFold(path, targetPath) {
+			pids = append(pids, p.Pid)
+		}
+	}
+	return pids, nil
 }
 
 func killByPid(pid int) error {
@@ -88,7 +156,7 @@ func killByPid(pid int) error {
 	// 在 Unix 上，它也只是建立一个进程对象的引用
 	p, err := os.FindProcess(pid)
 	if err != nil {
-		return fmt.Errorf("no find PID: %d, %s", pid, err)
+		return fmt.Errorf("no find PID: %d, %v", pid, err)
 	}
 
 	// Kill 会直接强制结束进程
