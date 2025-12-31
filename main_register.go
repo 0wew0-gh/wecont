@@ -3,6 +3,7 @@ package wecont
 import (
 	"encoding/json"
 	"fmt"
+	"path/filepath"
 	"sort"
 	"time"
 
@@ -54,13 +55,20 @@ func (wc Wecont) RegisterProgram(c Config) (Wecont, string, error) {
 			return wc, "", fmt.Errorf("program already exists")
 		}
 	}
+
+	filePath := fmt.Sprintf("%s-%s", c.Path, c.Name)
+	absPath, err := filepath.Abs(filePath)
+	if err != nil {
+		return wc, "", fmt.Errorf("get abs path: %+v", err)
+	}
+
 	tn := time.Now()
-	id := nyacrypt.MD5String(fmt.Sprintf("%s-%s", c.Path, c.Name), fmt.Sprintf("%v", tn))
-	newP := Program{Name: c.Name, Path: c.Path, Status: STOP, Created: tn.UnixNano(), ID: id}
+	id := nyacrypt.MD5String(filePath, fmt.Sprintf("%v", tn))
+	newP := Program{Name: c.Name, Path: absPath, Status: STOP, Created: tn.UnixNano(), ID: id}
 
 	wc.Programs[id] = newP
 
-	err := wc.SaveConfig(pID_path)
+	err = wc.SaveConfig(pID_path)
 	return wc, id, err
 }
 

@@ -80,7 +80,7 @@ func (wc Wecont) StopChild(programID string) error {
 	wc.Programs[programID] = programObj
 	wc.SaveConfig(pID_path)
 
-	findPIDs, err := getPidsByName(programObj.Name, programObj.Path)
+	findPIDs, err := getPidsByName(programObj.FileName, programObj.Path)
 	if err != nil {
 		return err
 	}
