@@ -18,13 +18,24 @@ var (
 )
 
 func Init(path string, infoLog *log.Logger, debugLog *log.Logger, errLog *log.Logger) (Wecont, error) {
-	wc, err := ReadConfig(path)
+	db, err := badger_Link(path)
+	if err != nil {
+		return Wecont{
+			IsNull:   false,
+			Programs: make(map[string]Program),
+		}, err
+	}
+
+	programsIDs := badger_ReadIDList(db)
+
+	wc, err := ReadConfig(db, programsIDs)
 	if err != nil {
 		wc = Wecont{
 			IsNull:   false,
 			Programs: make(map[string]Program),
 		}
 	}
+	wc.DB = db
 	wc.IsNull = false
 	l = Logger{Info: infoLog, Debug: debugLog, Error: errLog}
 	pID_path = path

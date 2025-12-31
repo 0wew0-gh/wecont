@@ -1,12 +1,16 @@
 package wecont
 
-import "log"
+import (
+	"log"
+
+	"github.com/dgraph-io/badger/v4"
+)
 
 const (
 	NetType    = "unix"
 	SocketAddr = "sub_program.sock"
 
-	subPID = "wecont.pid"
+	subPID = "pid"
 )
 const (
 	RUN     = "run"
@@ -23,6 +27,7 @@ type Config struct {
 
 type Wecont struct {
 	IsNull   bool
+	DB       *badger.DB
 	Programs map[string]Program `json:"programs"`
 }
 
