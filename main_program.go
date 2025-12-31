@@ -38,7 +38,7 @@ func (wc Wecont) StartChild(programID string) (*exec.Cmd, error) {
 		return nil, fmt.Errorf("no find program")
 	}
 
-	cmd := SetAttributes(fmt.Sprintf("%s%s", programObj.Path, programObj.FileName))
+	cmd := SetAttributes(programObj.Path, programObj.FileName)
 
 	cmd.Stdout = l.Info.Writer()
 	cmd.Stderr = l.Error.Writer()
@@ -120,7 +120,10 @@ func (p Program) sendMsg(cmd string) (string, error) {
 	// 读取回复
 	reader := bufio.NewReader(conn)
 	reply, err := reader.ReadString('\n')
-	return reply, fmt.Errorf("read reply failed: %v", err)
+	if err != nil {
+		return reply, fmt.Errorf("read reply failed: %v", err)
+	}
+	return reply, nil
 
 }
 

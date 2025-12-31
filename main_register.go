@@ -3,8 +3,10 @@ package wecont
 import (
 	"encoding/json"
 	"fmt"
+	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/kagurazakayashi/libNyaruko_Go/nyacrypt"
@@ -47,6 +49,9 @@ func (wc Wecont) SaveConfig(path string) error {
 }
 
 func (wc Wecont) RegisterProgram(c Config) (Wecont, string, error) {
+	if c.Name == "" || c.FileName == "" || c.Path == "" {
+		return wc, "", fmt.Errorf("invalid config")
+	}
 	for _, v := range wc.Programs {
 		if v.Name == c.Name {
 			return wc, "", fmt.Errorf("name already exists")
@@ -56,15 +61,18 @@ func (wc Wecont) RegisterProgram(c Config) (Wecont, string, error) {
 		}
 	}
 
-	filePath := fmt.Sprintf("%s-%s", c.Path, c.Name)
-	absPath, err := filepath.Abs(filePath)
+	filePath := fmt.Sprintf("%s%s", c.Path, c.Name)
+	absPath, err := filepath.Abs(c.Path)
 	if err != nil {
 		return wc, "", fmt.Errorf("get abs path: %+v", err)
+	}
+	if !strings.HasSuffix(absPath, string(os.PathSeparator)) {
+		absPath += string(os.PathSeparator)
 	}
 
 	tn := time.Now()
 	id := nyacrypt.MD5String(filePath, fmt.Sprintf("%v", tn))
-	newP := Program{Name: c.Name, Path: absPath, Status: STOP, Created: tn.UnixNano(), ID: id}
+	newP := Program{Name: c.Name, FileName: c.FileName, Path: absPath, Status: STOP, Created: tn.UnixNano(), ID: id}
 
 	wc.Programs[id] = newP
 
@@ -79,7 +87,17 @@ func (wc Wecont) RemoveProgram(id string) (Wecont, error) {
 	}
 	err := killByPid(p.PID)
 	if err != nil {
-		return wc, err
+		findPIDs, err := getPidsByName(p.FileName, p.Path)
+		if err != nil {
+			return wc, err
+		}
+
+		for _, v := range findPIDs {
+			if v == int32(p.PID) {
+				l.Info.Printf("kill program %d\n", v)
+				killByPid(int(v))
+			}
+		}
 	}
 	delete(wc.Programs, id)
 	err = wc.SaveConfig(pID_path)
