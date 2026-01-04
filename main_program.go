@@ -165,17 +165,14 @@ func (wcc *WecontConfig) SendMsg(id string, cmd string) (string, error) {
 	return p.sendMsg(cmd)
 }
 
-// 获取进程ID
-//
-//	targetName	string	进程名称
-//	targetPath	string	进程路径
-func GetPidsByName(targetName string, targetPath string) ([]int32, error) {
-	var pids []int32
+// 获取进程对象
+func GetProcessByName(targetName string, targetPath string) ([]*process.Process, error) {
+	pList := []*process.Process{}
 
 	// 获取所有进程列表
 	processes, err := process.Processes()
 	if err != nil {
-		return nil, fmt.Errorf("get pid faild:%v", err)
+		return nil, err
 	}
 
 	for _, p := range processes {
@@ -195,8 +192,26 @@ func GetPidsByName(targetName string, targetPath string) ([]int32, error) {
 		tPath := fmt.Sprintf("%s%s", targetPath, targetName)
 		// 匹配名称 (不区分大小写)
 		if strings.EqualFold(name, targetName) && strings.EqualFold(path, tPath) {
-			pids = append(pids, p.Pid)
+			pList = append(pList, p)
 		}
+	}
+	return pList, nil
+}
+
+// 获取进程ID
+//
+//	targetName	string	进程名称
+//	targetPath	string	进程路径
+func GetPidsByName(targetName string, targetPath string) ([]int32, error) {
+	var pids []int32
+
+	pList, err := GetProcessByName(targetName, targetPath)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, v := range pList {
+		pids = append(pids, v.Pid)
 	}
 	return pids, nil
 }

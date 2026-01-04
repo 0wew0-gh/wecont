@@ -124,3 +124,18 @@ type Logger struct {
 	Debug *log.Logger
 	Error *log.Logger
 }
+
+type ProgramInfo struct {
+	Name   string
+	Path   string
+	CPU    float64
+	Memory float64 // 字节 (Bytes)
+	IO     IOCount
+}
+
+type IOCount struct {
+	ReadCount  uint64 // 读操作次数
+	WriteCount uint64 // 写操作次数
+	ReadBytes  uint64 // 读取的总字节数
+	WriteBytes uint64 // 写入的总字节数
+}

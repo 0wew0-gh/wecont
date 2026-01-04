@@ -69,3 +69,46 @@ func killByPid(pid int) error {
 
 	return nil
 }
+
+func (wcc *WecontConfig) MonitorByPID(id string) ([]ProgramInfo, error) {
+	wc := wcc.Get()
+	pObj, ok := wc.Programs[id]
+	if !ok {
+		return nil, fmt.Errorf("program not found")
+	}
+
+	pList, err := GetProcessByName(pObj.FileName, pObj.Path)
+	if err != nil {
+		return nil, fmt.Errorf("get process failed: %v", err)
+	}
+	if len(pList) == 0 {
+		return nil, fmt.Errorf("program not found")
+	}
+	pInfoList := []ProgramInfo{}
+
+	for _, p := range pList {
+		pInfo := ProgramInfo{
+			Name: pObj.FileName,
+			Path: pObj.Path,
+		}
+		pCPUpercent, err := p.CPUPercent()
+		if err == nil {
+			pInfo.CPU = pCPUpercent
+		}
+
+		pMemInfo, err := p.MemoryInfo()
+		if err == nil {
+			pInfo.Memory = float64(pMemInfo.RSS)
+		}
+
+		pIO, err := p.IOCounters()
+		if err == nil {
+			pInfo.IO.ReadBytes = pIO.ReadBytes
+			pInfo.IO.ReadCount = pIO.ReadCount
+			pInfo.IO.WriteBytes = pIO.WriteBytes
+			pInfo.IO.WriteCount = pIO.WriteCount
+		}
+		pInfoList = append(pInfoList, pInfo)
+	}
+	return pInfoList, nil
+}
