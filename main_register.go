@@ -9,14 +9,13 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dgraph-io/badger/v4"
 	"github.com/kagurazakayashi/libNyaruko_Go/nyacrypt"
 )
 
-func ReadConfig(db *badger.DB, programsIDs []string) (Wecont, error) {
+func (b BadgerDB) ReadConfig(programsIDs []string) (*WecontConfig, error) {
 	var configObj Programs
 	for _, v := range programsIDs {
-		val, err := badger_Read(db, []byte(v))
+		val, err := b.Read([]byte(v))
 		if err != nil {
 			continue
 		}
@@ -34,16 +33,19 @@ func ReadConfig(db *badger.DB, programsIDs []string) (Wecont, error) {
 		wc.Programs[v.ID] = v
 	}
 
-	return wc, nil
+	wcc := &WecontConfig{}
+	wcc.value.Store(&wc)
+	return wcc, nil
 }
 
-func (wc Wecont) SaveConfig(path string) error {
-	if wc.DB == nil {
+func (wcc *WecontConfig) SaveConfig(path string) error {
+	wc := wcc.Get()
+	if wc.B.DB == nil {
 		db, err := badger_Link(path)
 		if err != nil {
 			return err
 		}
-		wc.DB = db
+		wcc.UpdateDB(db)
 	}
 
 	var configObj Programs
@@ -62,13 +64,13 @@ func (wc Wecont) SaveConfig(path string) error {
 			errList = append(errList, fmt.Errorf("[%s]json.Marshal error: %+v", obj.ID, err))
 			continue
 		}
-		err = badger_Write(wc.DB, []byte(idList[i]), configBytes)
+		err = wc.B.Write([]byte(idList[i]), configBytes)
 		if err != nil {
 			errList = append(errList, fmt.Errorf("[%s]badger write error: %+v", obj.ID, err))
 			continue
 		}
 	}
-	err := badger_Write(wc.DB, []byte("programs"), []byte(strings.Join(idList, ",")))
+	err := wc.B.Write([]byte("programs"), []byte(strings.Join(idList, ",")))
 	if err != nil {
 		errList = append(errList, fmt.Errorf("[programs]badger write error: %+v", err))
 	}
@@ -82,23 +84,24 @@ func (wc Wecont) SaveConfig(path string) error {
 	return fmt.Errorf("%+v", errStr)
 }
 
-func (wc Wecont) RegisterProgram(c Config) (Wecont, string, error) {
+func (wcc *WecontConfig) RegisterProgram(c Config) (string, error) {
 	if c.Name == "" || c.FileName == "" || c.Path == "" {
-		return wc, "", fmt.Errorf("invalid config")
+		return "", fmt.Errorf("invalid config")
 	}
+	wc := wcc.Get()
 	for _, v := range wc.Programs {
 		if v.Name == c.Name {
-			return wc, "", fmt.Errorf("name already exists")
+			return "", fmt.Errorf("name already exists")
 		}
 		if v.FileName == c.FileName && v.Path == c.Path {
-			return wc, "", fmt.Errorf("program already exists")
+			return "", fmt.Errorf("program already exists")
 		}
 	}
 
 	filePath := fmt.Sprintf("%s%s", c.Path, c.Name)
 	absPath, err := filepath.Abs(c.Path)
 	if err != nil {
-		return wc, "", fmt.Errorf("get abs path: %+v", err)
+		return "", fmt.Errorf("get abs path: %+v", err)
 	}
 	if !strings.HasSuffix(absPath, string(os.PathSeparator)) {
 		absPath += string(os.PathSeparator)
@@ -110,20 +113,21 @@ func (wc Wecont) RegisterProgram(c Config) (Wecont, string, error) {
 
 	wc.Programs[id] = newP
 
-	err = wc.SaveConfig(pID_path)
-	return wc, id, err
+	err = wcc.SaveConfig(pID_path)
+	return id, err
 }
 
-func (wc Wecont) RemoveProgram(id string) (Wecont, error) {
+func (wcc *WecontConfig) RemoveProgram(id string) error {
+	wc := wcc.Get()
 	p, ok := wc.Programs[id]
 	if !ok {
-		return wc, fmt.Errorf("program not found")
+		return fmt.Errorf("program not found")
 	}
 	err := killByPid(p.PID)
 	if err != nil {
 		findPIDs, err := GetPidsByName(p.FileName, p.Path)
 		if err != nil {
-			return wc, err
+			return err
 		}
 
 		for _, v := range findPIDs {
@@ -133,7 +137,9 @@ func (wc Wecont) RemoveProgram(id string) (Wecont, error) {
 			}
 		}
 	}
-	delete(wc.Programs, id)
-	err = wc.SaveConfig(pID_path)
-	return wc, err
+	wcProgram := copyProgram(wc.Programs)
+	delete(wcProgram, id)
+	wcc.UpdateProgram(wcProgram)
+	err = wcc.SaveConfig(pID_path)
+	return err
 }

@@ -8,7 +8,7 @@ import (
 	"os/exec"
 )
 
-func (wc Wecont) startChild(programObj Program) (*exec.Cmd, error) {
+func (wcc *WecontConfig) startChild(programObj Program) (*exec.Cmd, error) {
 	// 1. 删除旧文件（不检查错误，因为文件可能本就不存在）
 	os.Remove(fmt.Sprintf("%s%s", programObj.Path, SocketAddr))
 
@@ -21,10 +21,13 @@ func (wc Wecont) startChild(programObj Program) (*exec.Cmd, error) {
 		return nil, fmt.Errorf("cmd start failed: %v", err)
 	}
 
+	wc := wcc.Get()
 	programObj.PID = cmd.Process.Pid
-	wc.Programs[programObj.ID] = programObj
+	wcProgram := copyProgram(wc.Programs)
+	wcProgram[programObj.ID] = programObj
 
-	wc.SaveConfig(pID_path)
+	wcc.UpdateProgram(wcProgram)
+	wcc.SaveConfig(pID_path)
 
 	return cmd, nil
 }

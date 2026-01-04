@@ -8,6 +8,10 @@ import (
 	"github.com/dgraph-io/badger/v4/options"
 )
 
+type BadgerDB struct {
+	DB *badger.DB
+}
+
 func badger_Link(path string) (*badger.DB, error) {
 	// 1. 打开数据库（如果文件夹不存在会自动创建）
 	// 在闪存上使用时，建议开启压缩
@@ -25,17 +29,17 @@ func badger_Link(path string) (*badger.DB, error) {
 	return db, nil
 }
 
-func badger_ReadIDList(db *badger.DB) []string {
-	val, err := badger_Read(db, []byte("programs"))
+func (b BadgerDB) ReadIDList() []string {
+	val, err := b.Read([]byte("programs"))
 	if err != nil {
 		return []string{}
 	}
 	valStr := string(val)
 	return strings.Split(valStr, ",")
 }
-func badger_Read(db *badger.DB, key []byte) ([]byte, error) {
+func (b BadgerDB) Read(key []byte) ([]byte, error) {
 	value := []byte{}
-	err := db.View(func(txn *badger.Txn) error {
+	err := b.DB.View(func(txn *badger.Txn) error {
 		item, err := txn.Get([]byte(key))
 		if err != nil {
 			return err
@@ -50,8 +54,8 @@ func badger_Read(db *badger.DB, key []byte) ([]byte, error) {
 	return value, err
 }
 
-func badger_Write(db *badger.DB, key []byte, value []byte) error {
-	err := db.Update(func(txn *badger.Txn) error {
+func (b BadgerDB) Write(key []byte, value []byte) error {
+	err := b.DB.Update(func(txn *badger.Txn) error {
 		return txn.Set(key, value)
 	})
 	return err

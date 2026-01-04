@@ -15,34 +15,27 @@ var (
 	l        Logger
 )
 
-func Init(path string, infoLog *log.Logger, debugLog *log.Logger, errLog *log.Logger) (Wecont, error) {
+func Init(path string, infoLog *log.Logger, debugLog *log.Logger, errLog *log.Logger) (*WecontConfig, error) {
 	db, err := badger_Link(path)
 	if err != nil {
-		return Wecont{
-			IsNull:   false,
-			Programs: make(map[string]Program),
-		}, err
+		return &WecontConfig{}, err
 	}
+	bDB := BadgerDB{DB: db}
+	programsIDs := bDB.ReadIDList()
 
-	programsIDs := badger_ReadIDList(db)
+	wcc, _ := bDB.ReadConfig(programsIDs)
 
-	wc, err := ReadConfig(db, programsIDs)
-	if err != nil {
-		wc = Wecont{
-			IsNull:   false,
-			Programs: make(map[string]Program),
-		}
-	}
-	wc.DB = db
-	wc.IsNull = false
+	wc := wcc.Get()
+
+	wc.B.DB = db
 	l = Logger{Info: infoLog, Debug: debugLog, Error: errLog}
 	pID_path = path
-	return wc, nil
+	return wcc, nil
 }
 
 // 启动子程序
-func (wc Wecont) StartChild(programID string) (*exec.Cmd, error) {
-	pObj, ok := wc.Programs[programID]
+func (wcc *WecontConfig) StartChild(programID string) (*exec.Cmd, error) {
+	pObj, ok := wcc.Get().Programs[programID]
 	if !ok {
 		return nil, fmt.Errorf("no find program")
 	}
@@ -64,10 +57,11 @@ func (wc Wecont) StartChild(programID string) (*exec.Cmd, error) {
 		}
 	}
 
-	return wc.startChild(pObj)
+	return wcc.startChild(pObj)
 }
 
-func (wc Wecont) StopChild(programID string) error {
+func (wcc *WecontConfig) StopChild(programID string) error {
+	wc := wcc.Get()
 	pObj, ok := wc.Programs[programID]
 	if !ok {
 		return fmt.Errorf("no find program")
@@ -77,14 +71,15 @@ func (wc Wecont) StopChild(programID string) error {
 
 	pObj.PID = 0
 	wc.Programs[programID] = pObj
-	wc.SaveConfig(pID_path)
+	wcc.SaveConfig(pID_path)
 
 	os.Remove(fmt.Sprintf("%s%s", pObj.Path, SocketAddr))
 
 	return nil
 }
 
-func (wc Wecont) KillChild(programID string) error {
+func (wcc *WecontConfig) KillChild(programID string) error {
+	wc := wcc.Get()
 	pObj, ok := wc.Programs[programID]
 	if !ok {
 		return fmt.Errorf("no find program")
@@ -106,15 +101,15 @@ func (wc Wecont) KillChild(programID string) error {
 
 	pObj.PID = 0
 	wc.Programs[programID] = pObj
-	wc.SaveConfig(pID_path)
+	wcc.SaveConfig(pID_path)
 
 	os.Remove(fmt.Sprintf("%s%s", pObj.Path, SocketAddr))
 
 	return nil
 }
 
-func (wc Wecont) ReStartChild(programID string) (*exec.Cmd, error) {
-	pObj, ok := wc.Programs[programID]
+func (wcc *WecontConfig) ReStartChild(programID string) (*exec.Cmd, error) {
+	pObj, ok := wcc.Get().Programs[programID]
 	if !ok {
 		return nil, fmt.Errorf("no find program")
 	}
@@ -136,10 +131,11 @@ func (wc Wecont) ReStartChild(programID string) (*exec.Cmd, error) {
 		}
 	}
 
-	return wc.startChild(pObj)
+	return wcc.startChild(pObj)
 }
 
-func (wc Wecont) SetStatus(programID string, status string) error {
+func (wcc *WecontConfig) SetStatus(programID string, status string) error {
+	wc := wcc.Get()
 	pObj, ok := wc.Programs[programID]
 	if !ok {
 		return fmt.Errorf("no find program")
@@ -151,8 +147,8 @@ func (wc Wecont) SetStatus(programID string, status string) error {
 	return nil
 }
 
-func (wc Wecont) GetStatus(programID string) string {
-	pObj, ok := wc.Programs[programID]
+func (wcc *WecontConfig) GetStatus(programID string) string {
+	pObj, ok := wcc.Get().Programs[programID]
 	if !ok {
 		return ""
 	}
@@ -160,8 +156,8 @@ func (wc Wecont) GetStatus(programID string) string {
 	return pObj.Status
 }
 
-func (wc Wecont) SendMsg(id string, cmd string) (string, error) {
-	p, ok := wc.Programs[id]
+func (wcc *WecontConfig) SendMsg(id string, cmd string) (string, error) {
+	p, ok := wcc.Get().Programs[id]
 	if !ok {
 		return "", fmt.Errorf("program not found")
 	}
