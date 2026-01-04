@@ -1,10 +1,8 @@
 package wecont
 
 import (
-	"bufio"
 	"fmt"
 	"log"
-	"net"
 	"os"
 	"os/exec"
 	"strings"
@@ -44,65 +42,57 @@ func Init(path string, infoLog *log.Logger, debugLog *log.Logger, errLog *log.Lo
 
 // 启动子程序
 func (wc Wecont) StartChild(programID string) (*exec.Cmd, error) {
-	programObj, ok := wc.Programs[programID]
+	pObj, ok := wc.Programs[programID]
 	if !ok {
 		return nil, fmt.Errorf("no find program")
 	}
 
-	cmd := SetAttributes(programObj.Path, programObj.FileName)
-
-	cmd.Stdout = l.Info.Writer()
-	cmd.Stderr = l.Error.Writer()
-
-	if err := cmd.Start(); err != nil {
-		return nil, fmt.Errorf("cmd start failed: %v", err)
-	}
-
-	// 1. 删除旧文件（不检查错误，因为文件可能本就不存在）
-	os.Remove(SocketAddr)
-
-	if programObj.PID > 0 {
-		err := killByPid(programObj.PID)
+	if pObj.PID > 0 {
+		pids, err := GetPidsByName(pObj.FileName, pObj.Path)
+		killPids := []int{}
 		if err != nil {
-			l.Error.Printf("kill program %d failed: %v\n", programObj.PID, err)
+			killPids = append(killPids, pObj.PID)
+		} else {
+			for _, v := range pids {
+				if int(v) == pObj.PID {
+					killPids = append(killPids, pObj.PID)
+				}
+			}
 		}
-		os.Remove(subPID)
+		if len(killPids) > 0 {
+			return nil, fmt.Errorf("program has started")
+		}
 	}
 
-	programObj.PID = cmd.Process.Pid
-	wc.Programs[programID] = programObj
-
-	wc.SaveConfig(pID_path)
-
-	return cmd, nil
+	return wc.startChild(pObj)
 }
 
 func (wc Wecont) StopChild(programID string) error {
-	programObj, ok := wc.Programs[programID]
+	pObj, ok := wc.Programs[programID]
 	if !ok {
 		return fmt.Errorf("no find program")
 	}
 
-	programObj.sendMsg("STOP")
+	pObj.sendMsg("STOP")
 
-	programObj.PID = 0
-	wc.Programs[programID] = programObj
+	pObj.PID = 0
+	wc.Programs[programID] = pObj
 	wc.SaveConfig(pID_path)
 
-	os.Remove(fmt.Sprintf("%s%s", programObj.Path, SocketAddr))
+	os.Remove(fmt.Sprintf("%s%s", pObj.Path, SocketAddr))
 
 	return nil
 }
 
 func (wc Wecont) KillChild(programID string) error {
-	programObj, ok := wc.Programs[programID]
+	pObj, ok := wc.Programs[programID]
 	if !ok {
 		return fmt.Errorf("no find program")
 	}
 
-	pid := programObj.PID
+	pid := pObj.PID
 
-	findPIDs, err := GetPidsByName(programObj.FileName, programObj.Path)
+	findPIDs, err := GetPidsByName(pObj.FileName, pObj.Path)
 	if err != nil {
 		return err
 	}
@@ -114,13 +104,60 @@ func (wc Wecont) KillChild(programID string) error {
 		}
 	}
 
-	programObj.PID = 0
-	wc.Programs[programID] = programObj
+	pObj.PID = 0
+	wc.Programs[programID] = pObj
 	wc.SaveConfig(pID_path)
 
-	os.Remove(fmt.Sprintf("%s%s", programObj.Path, SocketAddr))
+	os.Remove(fmt.Sprintf("%s%s", pObj.Path, SocketAddr))
 
 	return nil
+}
+
+func (wc Wecont) ReStartChild(programID string) (*exec.Cmd, error) {
+	pObj, ok := wc.Programs[programID]
+	if !ok {
+		return nil, fmt.Errorf("no find program")
+	}
+
+	if pObj.PID > 0 {
+		pids, err := GetPidsByName(pObj.FileName, pObj.Path)
+		killPids := []int{}
+		if err != nil {
+			killPids = append(killPids, pObj.PID)
+		} else {
+			for _, v := range pids {
+				if int(v) == pObj.PID {
+					killPids = append(killPids, pObj.PID)
+				}
+			}
+		}
+		for _, v := range killPids {
+			killByPid(v)
+		}
+	}
+
+	return wc.startChild(pObj)
+}
+
+func (wc Wecont) SetStatus(programID string, status string) error {
+	pObj, ok := wc.Programs[programID]
+	if !ok {
+		return fmt.Errorf("no find program")
+	}
+
+	pObj.Status = status
+	wc.Programs[programID] = pObj
+
+	return nil
+}
+
+func (wc Wecont) GetStatus(programID string) string {
+	pObj, ok := wc.Programs[programID]
+	if !ok {
+		return ""
+	}
+
+	return pObj.Status
 }
 
 func (wc Wecont) SendMsg(id string, cmd string) (string, error) {
@@ -130,27 +167,6 @@ func (wc Wecont) SendMsg(id string, cmd string) (string, error) {
 	}
 
 	return p.sendMsg(cmd)
-}
-
-func (p Program) sendMsg(cmd string) (string, error) {
-	// 拨号连接 .sock 或管道
-	conn, err := net.Dial(NetType, fmt.Sprintf("%s%s", p.Path, SocketAddr))
-	if err != nil {
-		return "", fmt.Errorf("link .sock failed: %v", err)
-	}
-	defer conn.Close()
-
-	// 发送指令
-	conn.Write([]byte(cmd + "\n"))
-
-	// 读取回复
-	reader := bufio.NewReader(conn)
-	reply, err := reader.ReadString('\n')
-	if err != nil {
-		return reply, fmt.Errorf("read reply failed: %v", err)
-	}
-	return reply, nil
-
 }
 
 // 获取进程ID
@@ -187,21 +203,4 @@ func GetPidsByName(targetName string, targetPath string) ([]int32, error) {
 		}
 	}
 	return pids, nil
-}
-
-func killByPid(pid int) error {
-	// FindProcess 在 Windows 上不会检查进程是否存在
-	// 在 Unix 上，它也只是建立一个进程对象的引用
-	p, err := os.FindProcess(pid)
-	if err != nil {
-		return fmt.Errorf("no find PID: %d, %v", pid, err)
-	}
-
-	// Kill 会直接强制结束进程
-	err = p.Kill()
-	if err != nil {
-		return fmt.Errorf("failed to force terminate the process: %v", err)
-	}
-
-	return nil
 }

@@ -8,7 +8,7 @@ import (
 
 const (
 	NetType    = "unix"
-	SocketAddr = "sub_program.sock"
+	SocketAddr = "wecont_link.sock"
 
 	subPID = "pid"
 )
