@@ -85,13 +85,24 @@ func (wc Wecont) StopChild(programID string) error {
 
 	programObj.sendMsg("STOP")
 
-	pid := programObj.PID
-
 	programObj.PID = 0
 	wc.Programs[programID] = programObj
 	wc.SaveConfig(pID_path)
 
-	findPIDs, err := getPidsByName(programObj.FileName, programObj.Path)
+	os.Remove(fmt.Sprintf("%s%s", programObj.Path, SocketAddr))
+
+	return nil
+}
+
+func (wc Wecont) KillChild(programID string) error {
+	programObj, ok := wc.Programs[programID]
+	if !ok {
+		return fmt.Errorf("no find program")
+	}
+
+	pid := programObj.PID
+
+	findPIDs, err := GetPidsByName(programObj.FileName, programObj.Path)
 	if err != nil {
 		return err
 	}
@@ -102,6 +113,10 @@ func (wc Wecont) StopChild(programID string) error {
 			killByPid(int(v))
 		}
 	}
+
+	programObj.PID = 0
+	wc.Programs[programID] = programObj
+	wc.SaveConfig(pID_path)
 
 	os.Remove(fmt.Sprintf("%s%s", programObj.Path, SocketAddr))
 
@@ -138,7 +153,11 @@ func (p Program) sendMsg(cmd string) (string, error) {
 
 }
 
-func getPidsByName(targetName string, targetPath string) ([]int32, error) {
+// 获取进程ID
+//
+//	targetName	string	进程名称
+//	targetPath	string	进程路径
+func GetPidsByName(targetName string, targetPath string) ([]int32, error) {
 	var pids []int32
 
 	// 获取所有进程列表
@@ -151,16 +170,19 @@ func getPidsByName(targetName string, targetPath string) ([]int32, error) {
 		// 获取进程名称
 		name, err := p.Name()
 		if err != nil {
+			l.Error.Printf("get process [name] failed: %v\n", err)
 			continue // 忽略权限不足或已退出的进程
 		}
 
 		path, err := p.Exe()
 		if err != nil {
+			l.Error.Printf("get process [path] failed: %v\n", err)
 			continue
 		}
 
+		tPath := fmt.Sprintf("%s%s", targetPath, targetName)
 		// 匹配名称 (不区分大小写)
-		if strings.EqualFold(name, targetName) && strings.EqualFold(path, targetPath) {
+		if strings.EqualFold(name, targetName) && strings.EqualFold(path, tPath) {
 			pids = append(pids, p.Pid)
 		}
 	}

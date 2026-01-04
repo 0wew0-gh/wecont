@@ -121,7 +121,7 @@ func (wc Wecont) RemoveProgram(id string) (Wecont, error) {
 	}
 	err := killByPid(p.PID)
 	if err != nil {
-		findPIDs, err := getPidsByName(p.FileName, p.Path)
+		findPIDs, err := GetPidsByName(p.FileName, p.Path)
 		if err != nil {
 			return wc, err
 		}
