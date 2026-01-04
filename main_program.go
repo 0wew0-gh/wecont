@@ -170,13 +170,13 @@ func GetPidsByName(targetName string, targetPath string) ([]int32, error) {
 		// 获取进程名称
 		name, err := p.Name()
 		if err != nil {
-			l.Error.Printf("get process [name] failed: %v\n", err)
+			// l.Error.Printf("get process [name] failed: %v\n", err)
 			continue // 忽略权限不足或已退出的进程
 		}
 
 		path, err := p.Exe()
 		if err != nil {
-			l.Error.Printf("get process [path] failed: %v\n", err)
+			// l.Error.Printf("get process [path] failed: %v\n", err)
 			continue
 		}
 
