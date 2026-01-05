@@ -28,6 +28,10 @@ func Children_init(infoLog *log.Logger, debugLog *log.Logger, errLog *log.Logger
 	}
 }
 
+func Dispose() {
+	os.Remove(SocketAddr)
+}
+
 func listenCommand(conn net.Conn, ping func(net.Conn), exit func(net.Conn)) {
 	defer conn.Close()
 	scanner := bufio.NewScanner(conn)

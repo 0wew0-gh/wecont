@@ -22,14 +22,35 @@ func (wcc *WecontConfig) startChild(programObj Program) (*exec.Cmd, error) {
 	}
 
 	wc := wcc.Get()
+
+	wcCmd := copyCmd(wc.Cmd)
+	wcCmd[programObj.ID] = cmd
+
 	programObj.PID = cmd.Process.Pid
 	wcProgram := copyProgram(wc.Programs)
 	wcProgram[programObj.ID] = programObj
 
-	wcc.UpdateProgram(wcProgram)
+	wcc.Update(nil, wcCmd, wcProgram)
 	wcc.SaveConfig(pID_path)
 
+	go wcc.cmdWait(programObj.ID)
 	return cmd, nil
+}
+
+func (wcc *WecontConfig) cmdWait(id string) {
+	wc := wcc.Get()
+	cmd, ok := wc.Cmd[id]
+	if !ok {
+		return
+	}
+	cmd.Wait()
+	wc = wcc.Get()
+	_, ok = wc.Cmd[id]
+	if !ok {
+		return
+	}
+	wc.Cmd[id] = nil
+	wcc.UpdateCmd(wc.Cmd)
 }
 
 func (p Program) sendMsg(cmd string) (string, error) {
@@ -68,47 +89,4 @@ func killByPid(pid int) error {
 	}
 
 	return nil
-}
-
-func (wcc *WecontConfig) MonitorByPID(id string) ([]ProgramInfo, error) {
-	wc := wcc.Get()
-	pObj, ok := wc.Programs[id]
-	if !ok {
-		return nil, fmt.Errorf("program not found")
-	}
-
-	pList, err := GetProcessByName(pObj.FileName, pObj.Path)
-	if err != nil {
-		return nil, fmt.Errorf("get process failed: %v", err)
-	}
-	if len(pList) == 0 {
-		return nil, fmt.Errorf("program not found")
-	}
-	pInfoList := []ProgramInfo{}
-
-	for _, p := range pList {
-		pInfo := ProgramInfo{
-			Name: pObj.FileName,
-			Path: pObj.Path,
-		}
-		pCPUpercent, err := p.CPUPercent()
-		if err == nil {
-			pInfo.CPU = pCPUpercent
-		}
-
-		pMemInfo, err := p.MemoryInfo()
-		if err == nil {
-			pInfo.Memory = float64(pMemInfo.RSS)
-		}
-
-		pIO, err := p.IOCounters()
-		if err == nil {
-			pInfo.IO.ReadBytes = pIO.ReadBytes
-			pInfo.IO.ReadCount = pIO.ReadCount
-			pInfo.IO.WriteBytes = pIO.WriteBytes
-			pInfo.IO.WriteCount = pIO.WriteCount
-		}
-		pInfoList = append(pInfoList, pInfo)
-	}
-	return pInfoList, nil
 }

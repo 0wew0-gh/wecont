@@ -2,6 +2,7 @@ package wecont
 
 import (
 	"log"
+	"os/exec"
 	"sync/atomic"
 
 	"github.com/dgraph-io/badger/v4"
@@ -28,7 +29,8 @@ type Config struct {
 
 type Wecont struct {
 	B        BadgerDB
-	Programs map[string]Program `json:"programs"`
+	Cmd      map[string]*exec.Cmd `json:"cmd"`
+	Programs map[string]Program   `json:"programs"`
 }
 
 type WecontConfig struct {
@@ -47,13 +49,22 @@ func copyProgram(p map[string]Program) map[string]Program {
 	}
 	return newP
 }
+func copyCmd(p map[string]*exec.Cmd) map[string]*exec.Cmd {
+	newP := make(map[string]*exec.Cmd)
+
+	for k, v := range p {
+		newP[k] = v
+	}
+	return newP
+}
 
 // 更新配置：需要修改 Map 时，必须全量替换
-func (cm *WecontConfig) Update(db *badger.DB, mapP map[string]Program) {
+func (cm *WecontConfig) Update(db *badger.DB, mapC map[string]*exec.Cmd, mapP map[string]Program) {
 	oldCfg := cm.Get()
 	// 1. 创建新副本
 	newCfg := &Wecont{
 		B:        oldCfg.B,
+		Cmd:      copyCmd(mapC),
 		Programs: copyProgram(mapP),
 	}
 	if db != nil {
@@ -78,11 +89,23 @@ func (cm *WecontConfig) UpdateDB(db *badger.DB) {
 	cm.value.Store(wc)
 }
 
+func (cm *WecontConfig) UpdateCmd(p map[string]*exec.Cmd) {
+	oldCfg := cm.Get()
+	// 1. 创建新副本
+	newCfg := &Wecont{
+		B:        oldCfg.B,
+		Cmd:      copyCmd(p),
+		Programs: oldCfg.Programs,
+	}
+	cm.value.Store(newCfg)
+}
+
 func (cm *WecontConfig) UpdateProgram(p map[string]Program) {
 	oldCfg := cm.Get()
 	// 1. 创建新副本
 	newCfg := &Wecont{
 		B:        oldCfg.B,
+		Cmd:      oldCfg.Cmd,
 		Programs: copyProgram(p),
 	}
 	cm.value.Store(newCfg)

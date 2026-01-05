@@ -35,9 +35,15 @@ func Init(path string, infoLog *log.Logger, debugLog *log.Logger, errLog *log.Lo
 
 // 启动子程序
 func (wcc *WecontConfig) StartChild(programID string) (*exec.Cmd, error) {
-	pObj, ok := wcc.Get().Programs[programID]
+	wc := wcc.Get()
+	pObj, ok := wc.Programs[programID]
 	if !ok {
 		return nil, fmt.Errorf("no find program")
+	}
+	cmdObj, ok := wc.Cmd[programID]
+	if ok && cmdObj != nil {
+		// 获取运行中进程状态
+		return nil, fmt.Errorf("program has started, pid: %d", cmdObj.Process.Pid)
 	}
 
 	if pObj.PID > 0 {
@@ -109,9 +115,19 @@ func (wcc *WecontConfig) KillChild(programID string) error {
 }
 
 func (wcc *WecontConfig) ReStartChild(programID string) (*exec.Cmd, error) {
-	pObj, ok := wcc.Get().Programs[programID]
+	wc := wcc.Get()
+	pObj, ok := wc.Programs[programID]
 	if !ok {
 		return nil, fmt.Errorf("no find program")
+	}
+	cmdObj, ok := wc.Cmd[programID]
+	if ok && cmdObj != nil {
+		err := cmdObj.Process.Signal(os.Interrupt)
+		if err != nil {
+			cmdObj.Process.Kill()
+		}
+		pObj.PID = 0
+		cmdObj = nil
 	}
 
 	if pObj.PID > 0 {
@@ -154,6 +170,54 @@ func (wcc *WecontConfig) GetStatus(programID string) string {
 	}
 
 	return pObj.Status
+}
+
+func (wcc *WecontConfig) MonitorByPID(id string) ([]ProgramInfo, error) {
+	wc := wcc.Get()
+	pObj, ok := wc.Programs[id]
+	if !ok {
+		return nil, fmt.Errorf("program not found")
+	}
+
+	pCmd, ok := wc.Cmd[id]
+	if ok && pCmd == nil {
+		return nil, fmt.Errorf("program has exited")
+	}
+
+	pList, err := GetProcessByName(pObj.FileName, pObj.Path)
+	if err != nil {
+		return nil, fmt.Errorf("get process failed: %v", err)
+	}
+	if len(pList) == 0 {
+		return nil, fmt.Errorf("process not found")
+	}
+	pInfoList := []ProgramInfo{}
+
+	for _, p := range pList {
+		pInfo := ProgramInfo{
+			Name: pObj.FileName,
+			Path: pObj.Path,
+		}
+		pCPUpercent, err := p.CPUPercent()
+		if err == nil {
+			pInfo.CPU = pCPUpercent
+		}
+
+		pMemInfo, err := p.MemoryInfo()
+		if err == nil {
+			pInfo.Memory = float64(pMemInfo.RSS)
+		}
+
+		pIO, err := p.IOCounters()
+		if err == nil {
+			pInfo.IO.ReadBytes = pIO.ReadBytes
+			pInfo.IO.ReadCount = pIO.ReadCount
+			pInfo.IO.WriteBytes = pIO.WriteBytes
+			pInfo.IO.WriteCount = pIO.WriteCount
+		}
+		pInfoList = append(pInfoList, pInfo)
+	}
+	return pInfoList, nil
 }
 
 func (wcc *WecontConfig) SendMsg(id string, cmd string) (string, error) {
