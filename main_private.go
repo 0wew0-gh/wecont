@@ -28,6 +28,7 @@ func (wcc *WecontConfig) startChild(programObj Program) (*exec.Cmd, error) {
 
 	programObj.PID = cmd.Process.Pid
 	wcProgram := copyProgram(wc.Programs)
+	programObj.Status = RUN
 	wcProgram[programObj.ID] = programObj
 
 	wcc.Update(nil, wcCmd, wcProgram)
@@ -50,7 +51,13 @@ func (wcc *WecontConfig) cmdWait(id string) {
 		return
 	}
 	wc.Cmd[id] = nil
-	wcc.UpdateCmd(wc.Cmd)
+
+	pObj, ok := wc.Programs[id]
+	if ok {
+		pObj.Status = STOP
+		wc.Programs[id] = pObj
+	}
+	wcc.Update(nil, wc.Cmd, wc.Programs)
 }
 
 func (p Program) sendMsg(cmd string) (string, error) {

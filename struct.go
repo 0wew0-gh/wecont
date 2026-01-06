@@ -119,6 +119,7 @@ type Program struct {
 	Path     string `json:"path"`
 	Created  int64  `json:"created"`
 	Status   string `json:"status"`
+	Message  string `json:"message"`
 }
 type Programs []Program
 

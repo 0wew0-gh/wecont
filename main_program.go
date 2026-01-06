@@ -38,7 +38,7 @@ func (wcc *WecontConfig) StartChild(programID string) (*exec.Cmd, error) {
 	wc := wcc.Get()
 	pObj, ok := wc.Programs[programID]
 	if !ok {
-		return nil, fmt.Errorf("no find program")
+		return nil, fmt.Errorf("program not found")
 	}
 	cmdObj, ok := wc.Cmd[programID]
 	if ok && cmdObj != nil {
@@ -70,7 +70,7 @@ func (wcc *WecontConfig) StopChild(programID string) error {
 	wc := wcc.Get()
 	pObj, ok := wc.Programs[programID]
 	if !ok {
-		return fmt.Errorf("no find program")
+		return fmt.Errorf("program not found")
 	}
 
 	pObj.sendMsg("STOP")
@@ -88,7 +88,7 @@ func (wcc *WecontConfig) KillChild(programID string) error {
 	wc := wcc.Get()
 	pObj, ok := wc.Programs[programID]
 	if !ok {
-		return fmt.Errorf("no find program")
+		return fmt.Errorf("program not found")
 	}
 
 	pid := pObj.PID
@@ -118,7 +118,7 @@ func (wcc *WecontConfig) ReStartChild(programID string) (*exec.Cmd, error) {
 	wc := wcc.Get()
 	pObj, ok := wc.Programs[programID]
 	if !ok {
-		return nil, fmt.Errorf("no find program")
+		return nil, fmt.Errorf("program not found")
 	}
 	cmdObj, ok := wc.Cmd[programID]
 	if ok && cmdObj != nil {
@@ -154,7 +154,7 @@ func (wcc *WecontConfig) SetStatus(programID string, status string) error {
 	wc := wcc.Get()
 	pObj, ok := wc.Programs[programID]
 	if !ok {
-		return fmt.Errorf("no find program")
+		return fmt.Errorf("program not found")
 	}
 
 	pObj.Status = status
@@ -170,6 +170,28 @@ func (wcc *WecontConfig) GetStatus(programID string) string {
 	}
 
 	return pObj.Status
+}
+
+func (wcc *WecontConfig) SetMessage(programID string, message string) error {
+	wc := wcc.Get()
+	pObj, ok := wc.Programs[programID]
+	if !ok {
+		return fmt.Errorf("program not found")
+	}
+
+	pObj.Message = message
+	wc.Programs[programID] = pObj
+
+	return nil
+}
+
+func (wcc *WecontConfig) GetMessage(programID string) string {
+	pObj, ok := wcc.Get().Programs[programID]
+	if !ok {
+		return ""
+	}
+
+	return pObj.Message
 }
 
 func (wcc *WecontConfig) MonitorByPID(id string) ([]ProgramInfo, error) {
