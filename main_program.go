@@ -73,11 +73,30 @@ func (wcc *WecontConfig) StopChild(programID string) error {
 		return fmt.Errorf("program not found")
 	}
 
-	pObj.sendMsg("STOP")
+	_, err := pObj.sendMsg("STOP")
+	if err != nil {
+		cmdObj, ok := wc.Cmd[programID]
+		if !ok {
+			return fmt.Errorf("program has exited")
+		}
+		if cmdObj == nil {
+			return fmt.Errorf("program has exited")
+		}
+		err := cmdObj.Process.Signal(os.Interrupt)
+		if err != nil {
+			err = cmdObj.Process.Kill()
+		}
+		if err != nil {
+			return err
+		}
+
+	}
 
 	pObj.PID = 0
+	pObj.Status = STOP
 	wc.Programs[programID] = pObj
 	wcc.SaveConfig(pID_path)
+	wcc.UpdateProgram(wc.Programs)
 
 	os.Remove(fmt.Sprintf("%s%s", pObj.Path, SocketAddr))
 
@@ -106,8 +125,10 @@ func (wcc *WecontConfig) KillChild(programID string) error {
 	}
 
 	pObj.PID = 0
+	pObj.Status = STOP
 	wc.Programs[programID] = pObj
 	wcc.SaveConfig(pID_path)
+	wcc.UpdateProgram(wc.Programs)
 
 	os.Remove(fmt.Sprintf("%s%s", pObj.Path, SocketAddr))
 
@@ -146,6 +167,10 @@ func (wcc *WecontConfig) ReStartChild(programID string) (*exec.Cmd, error) {
 			killByPid(v)
 		}
 	}
+	pObj.PID = 0
+	pObj.Status = STOP
+	wc.Programs[programID] = pObj
+	wcc.UpdateProgram(wc.Programs)
 
 	return wcc.startChild(pObj)
 }
@@ -159,6 +184,7 @@ func (wcc *WecontConfig) SetStatus(programID string, status string) error {
 
 	pObj.Status = status
 	wc.Programs[programID] = pObj
+	wcc.UpdateProgram(wc.Programs)
 
 	return nil
 }
@@ -181,6 +207,7 @@ func (wcc *WecontConfig) SetMessage(programID string, message string) error {
 
 	pObj.Message = message
 	wc.Programs[programID] = pObj
+	wcc.UpdateProgram(wc.Programs)
 
 	return nil
 }
