@@ -125,7 +125,7 @@ func (wcc *WecontConfig) RemoveProgram(id string) error {
 	}
 	err := killByPid(p.PID)
 	if err != nil {
-		findPIDs, err := GetPidsByName(p.FileName, p.Path)
+		findPIDs, err := GetPidsByName([]GetProgramParams{{ID: p.ID, Name: p.FileName, Path: p.Path}})
 		if err != nil {
 			return err
 		}

@@ -47,7 +47,7 @@ func (wcc *WecontConfig) StartChild(programID string) (*exec.Cmd, error) {
 	}
 
 	if pObj.PID > 0 {
-		pids, err := GetPidsByName(pObj.FileName, pObj.Path)
+		pids, err := GetPidsByName([]GetProgramParams{{ID: pObj.ID, Name: pObj.FileName, Path: pObj.Path}})
 		killPids := []int{}
 		if err != nil {
 			killPids = append(killPids, pObj.PID)
@@ -112,7 +112,7 @@ func (wcc *WecontConfig) KillChild(programID string) error {
 
 	pid := pObj.PID
 
-	findPIDs, err := GetPidsByName(pObj.FileName, pObj.Path)
+	findPIDs, err := GetPidsByName([]GetProgramParams{{ID: pObj.ID, Name: pObj.FileName, Path: pObj.Path}})
 	if err != nil {
 		return err
 	}
@@ -152,7 +152,7 @@ func (wcc *WecontConfig) ReStartChild(programID string) (*exec.Cmd, error) {
 	}
 
 	if pObj.PID > 0 {
-		pids, err := GetPidsByName(pObj.FileName, pObj.Path)
+		pids, err := GetPidsByName([]GetProgramParams{{ID: pObj.ID, Name: pObj.FileName, Path: pObj.Path}})
 		killPids := []int{}
 		if err != nil {
 			killPids = append(killPids, pObj.PID)
@@ -221,32 +221,68 @@ func (wcc *WecontConfig) GetMessage(programID string) string {
 	return pObj.Message
 }
 
-func (wcc *WecontConfig) MonitorByPID(id string) ([]ProgramInfo, error) {
+func (wcc *WecontConfig) MonitorByPID(id []string) []ProgramInfo {
+	if len(id) == 0 {
+		return []ProgramInfo{}
+	}
 	wc := wcc.Get()
-	pObj, ok := wc.Programs[id]
-	if !ok {
-		return nil, fmt.Errorf("program not found")
-	}
 
-	pCmd, ok := wc.Cmd[id]
-	if ok && pCmd == nil {
-		return nil, fmt.Errorf("program has exited")
-	}
+	gpp := []GetProgramParams{}
+	for _, v := range id {
+		pObj, ok := wc.Programs[v]
+		if !ok {
+			continue
+		}
 
-	pList, err := GetProcessByName(pObj.FileName, pObj.Path)
+		pCmd, ok := wc.Cmd[v]
+		if ok && pCmd == nil {
+			pObj.PID = 0
+			pObj.Status = STOP
+			wc.Programs[v] = pObj
+			continue
+		}
+		gpp = append(gpp, GetProgramParams{
+			ID:   pObj.ID,
+			Name: pObj.FileName,
+			Path: pObj.Path,
+		})
+	}
+	if len(gpp) == 0 {
+		wcc.UpdateProgram(wc.Programs)
+		return nil
+	}
+	// return nil, fmt.Errorf("program has exited")
+
+	pList, err := GetProcessByName(gpp)
 	if err != nil {
-		return nil, fmt.Errorf("get process failed: %v", err)
+		return nil
 	}
-	if len(pList) == 0 {
-		return nil, fmt.Errorf("process not found")
-	}
+	// if len(pList) == 0 {
+	// 	return nil, fmt.Errorf("process not found")
+	// }
 	pInfoList := []ProgramInfo{}
 
 	for _, p := range pList {
-		pInfo := ProgramInfo{
-			Name: pObj.FileName,
-			Path: pObj.Path,
+		pInfo := ProgramInfo{}
+
+		temp, err := p.Name()
+		if err == nil {
+			pInfo.Name = temp
 		}
+		temp, err = p.Exe()
+		if err == nil {
+			pInfo.Path = temp
+		}
+		for _, v := range gpp {
+			path := fmt.Sprintf("%s%s", v.Path, v.Name)
+			if v.Name == pInfo.Name && path == pInfo.Path {
+				pInfo.ID = v.ID
+				break
+			}
+		}
+
+		pInfo.PID = int(p.Pid)
+
 		pCPUpercent, err := p.CPUPercent()
 		if err == nil {
 			pInfo.CPU = pCPUpercent
@@ -266,7 +302,30 @@ func (wcc *WecontConfig) MonitorByPID(id string) ([]ProgramInfo, error) {
 		}
 		pInfoList = append(pInfoList, pInfo)
 	}
-	return pInfoList, nil
+	for _, v := range id {
+		obj, ok := wc.Programs[v]
+		if !ok {
+			continue
+		}
+		pid := 0
+		for _, p := range pInfoList {
+			if p.ID == v {
+				pid = p.PID
+				break
+			}
+		}
+		if pid > 0 {
+			if obj.Status == STOP {
+				obj.Status = RUN
+			}
+		} else {
+			obj.Status = STOP
+		}
+		obj.PID = pid
+		wc.Programs[v] = obj
+	}
+	wcc.UpdateProgram(wc.Programs)
+	return pInfoList
 }
 
 func (wcc *WecontConfig) SendMsg(id string, cmd string) (string, error) {
@@ -279,7 +338,7 @@ func (wcc *WecontConfig) SendMsg(id string, cmd string) (string, error) {
 }
 
 // 获取进程对象
-func GetProcessByName(targetName string, targetPath string) ([]*process.Process, error) {
+func GetProcessByName(target []GetProgramParams) ([]*process.Process, error) {
 	pList := []*process.Process{}
 
 	// 获取所有进程列表
@@ -301,11 +360,12 @@ func GetProcessByName(targetName string, targetPath string) ([]*process.Process,
 			// l.Error.Printf("get process [path] failed: %v\n", err)
 			continue
 		}
-
-		tPath := fmt.Sprintf("%s%s", targetPath, targetName)
-		// 匹配名称 (不区分大小写)
-		if strings.EqualFold(name, targetName) && strings.EqualFold(path, tPath) {
-			pList = append(pList, p)
+		for _, v := range target {
+			tPath := fmt.Sprintf("%s%s", v.Path, v.Name)
+			// 匹配名称 (不区分大小写)
+			if strings.EqualFold(name, v.Name) && strings.EqualFold(path, tPath) {
+				pList = append(pList, p)
+			}
 		}
 	}
 	return pList, nil
@@ -315,10 +375,10 @@ func GetProcessByName(targetName string, targetPath string) ([]*process.Process,
 //
 //	targetName	string	进程名称
 //	targetPath	string	进程路径
-func GetPidsByName(targetName string, targetPath string) ([]int32, error) {
+func GetPidsByName(target []GetProgramParams) ([]int32, error) {
 	var pids []int32
 
-	pList, err := GetProcessByName(targetName, targetPath)
+	pList, err := GetProcessByName(target)
 	if err != nil {
 		return nil, err
 	}

@@ -149,9 +149,17 @@ type Logger struct {
 	Error *log.Logger
 }
 
+type GetProgramParams struct {
+	ID   string
+	Name string
+	Path string
+}
+
 type ProgramInfo struct {
+	ID     string
 	Name   string
 	Path   string
+	PID    int
 	CPU    float64
 	Memory float64 // 字节 (Bytes)
 	IO     IOCount
