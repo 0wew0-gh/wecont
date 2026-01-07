@@ -7,7 +7,7 @@ import (
 	"os"
 )
 
-func Children_init(infoLog *log.Logger, debugLog *log.Logger, errLog *log.Logger, ping func(net.Conn), exit func(net.Conn)) {
+func Children_init(infoLog *log.Logger, debugLog *log.Logger, errLog *log.Logger, message func(net.Conn, string)) {
 	l = Logger{Info: infoLog, Debug: debugLog, Error: errLog}
 	// 先删除旧的 sock 文件
 	os.Remove(SocketAddr)
@@ -24,7 +24,7 @@ func Children_init(infoLog *log.Logger, debugLog *log.Logger, errLog *log.Logger
 			l.Error.Println("listen accept error:", err)
 			continue
 		}
-		go listenCommand(conn, ping, exit)
+		go listenCommand(conn, message)
 	}
 }
 
@@ -32,19 +32,12 @@ func Dispose() {
 	os.Remove(SocketAddr)
 }
 
-func listenCommand(conn net.Conn, ping func(net.Conn), exit func(net.Conn)) {
+func listenCommand(conn net.Conn, message func(net.Conn, string)) {
 	defer conn.Close()
 	scanner := bufio.NewScanner(conn)
 	for scanner.Scan() {
 		msg := scanner.Text()
 		l.Info.Println("get msg:", msg)
-		switch msg {
-		case "PING":
-			ping(conn)
-		case "STOP":
-			exit(conn)
-			os.Remove(SocketAddr)
-			os.Exit(0)
-		}
+		message(conn, msg)
 	}
 }
