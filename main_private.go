@@ -55,6 +55,7 @@ func (wcc *WecontConfig) cmdWait(id string) {
 	pObj, ok := wc.Programs[id]
 	if ok {
 		pObj.Status = STOP
+		pObj.Message = ""
 		wc.Programs[id] = pObj
 	}
 	wcc.Update(nil, wc.Cmd, wc.Programs)

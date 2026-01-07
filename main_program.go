@@ -94,6 +94,7 @@ func (wcc *WecontConfig) StopChild(programID string) error {
 
 	pObj.PID = 0
 	pObj.Status = STOP
+	pObj.Message = ""
 	wc.Programs[programID] = pObj
 	wcc.SaveConfig(pID_path)
 	wcc.UpdateProgram(wc.Programs)
@@ -126,6 +127,7 @@ func (wcc *WecontConfig) KillChild(programID string) error {
 
 	pObj.PID = 0
 	pObj.Status = STOP
+	pObj.Message = ""
 	wc.Programs[programID] = pObj
 	wcc.SaveConfig(pID_path)
 	wcc.UpdateProgram(wc.Programs)
@@ -169,6 +171,7 @@ func (wcc *WecontConfig) ReStartChild(programID string) (*exec.Cmd, error) {
 	}
 	pObj.PID = 0
 	pObj.Status = STOP
+	pObj.Message = ""
 	wc.Programs[programID] = pObj
 	wcc.UpdateProgram(wc.Programs)
 
@@ -238,6 +241,7 @@ func (wcc *WecontConfig) MonitorByPID(id []string) []ProgramInfo {
 		if ok && pCmd == nil {
 			pObj.PID = 0
 			pObj.Status = STOP
+			pObj.Message = ""
 			wc.Programs[v] = pObj
 			continue
 		}
@@ -320,6 +324,7 @@ func (wcc *WecontConfig) MonitorByPID(id []string) []ProgramInfo {
 			}
 		} else {
 			obj.Status = STOP
+			obj.Message = ""
 		}
 		obj.PID = pid
 		wc.Programs[v] = obj
